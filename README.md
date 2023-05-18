@@ -9,6 +9,9 @@ If you use this for your day-to-day, human-not-machine translation desires, no m
 
 
 ## Valid uses – examples
+
+Both the target language (`-t`) and the content of the string to be translated (`-c`) must be specified.
+
     trl -h
     trl -t ES -c "Hallo Welt! Wie geht's?"
     trl -c "How does Hungarian work again..." -t "HU"
