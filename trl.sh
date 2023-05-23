@@ -7,10 +7,10 @@
 auth_key='paste_your_auth_key_here:fx'
 
 ############################################################
-# Help                                                     #
+# Helper functions                                         #
 ############################################################
 
-help()
+function help()
 {
    echo "Translate phrases quickly using DeepL"
    echo "Dependency: jq for processing the response JSON"
@@ -18,10 +18,20 @@ help()
    echo "Syntax: trl [-t|h|c]"
    echo "options:"
    echo "h     Print this help."
-   echo "t     Two-letter target language code (FR, ES, DE, ...)"
-   echo "c     Content to be translated (escape with surrounding \" double quotes!"
-   echo "      not necessary for single words.)"
+   echo "t     Two-letter target language code, ex. FR, ES, DE, ..."
+   echo "c     Content to be translated."
+   echo "      Escape with surrounding \" double quotes, optional for single words!"
    echo
+}
+
+# True if $1 is an executable in $PATH
+# Works in both {ba,z}sh
+function is_bin_in_path {
+  if [[ -n $ZSH_VERSION ]]; then
+    builtin whence -p "$1" &> /dev/null
+  else  # bash:
+    builtin type -P "$1" &> /dev/null
+  fi
 }
 
 ############################################################
@@ -50,6 +60,18 @@ else
             exit 1;;
       esac
    done
+fi
+
+############################################################
+# Check dependency's availability, exit with notice if not #
+############################################################
+
+if ! is_bin_in_path jq
+then
+   echo "This tool requires jq (https://stedolan.github.io/jq/)."
+   echo "Install it please, and then run this tool again."
+   echo "Use trl -h for further information."
+   exit
 fi
 
 ############################################################
