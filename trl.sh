@@ -4,14 +4,6 @@
 # Written starting from 2023-05                            #
 ############################################################
 
-auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' ./API_KEY.txt)
-if [[ ! -n $auth_key ]] then
-   echo "Please set a valid DeepL authentication key in API_KEY.txt"
-   echo "Use trl -h for further information."
-   exit
-fi
-
-
 ############################################################
 # Helper functions                                         #
 ############################################################
@@ -21,6 +13,7 @@ function help()
    echo "Translate phrases quickly using DeepL"
    echo "Dependency: jq for processing the response JSON"
    echo "Registration for an API key is free, but required for this program."
+   echo "(https://deepl.com/api)"
    echo
    echo "Syntax: trl [-t|h|c]"
    echo "options:"
@@ -67,6 +60,17 @@ else
             exit 1;;
       esac
    done
+fi
+
+############################################################
+# Read API key from file and perform a (basic) check       #
+############################################################
+
+auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' ./API_KEY.txt)
+if [[ ! -n $auth_key ]] then
+   echo "Please set a valid DeepL authentication key in API_KEY.txt"
+   echo "Use trl -h for further information."
+   exit
 fi
 
 ############################################################
