@@ -1,10 +1,16 @@
 #!/bin/zsh
 
 ############################################################
-# Written on 2023-05-16                                    #
+# Written starting from 2023-05                            #
 ############################################################
 
-auth_key='paste_your_auth_key_here:fx'
+auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' ./API_KEY.txt)
+if [[ ! -n $auth_key ]] then
+   echo "Please set a valid DeepL authentication key in API_KEY.txt"
+   echo "Use trl -h for further information."
+   exit
+fi
+
 
 ############################################################
 # Helper functions                                         #
@@ -14,6 +20,7 @@ function help()
 {
    echo "Translate phrases quickly using DeepL"
    echo "Dependency: jq for processing the response JSON"
+   echo "Registration for an API key is free, but required for this program."
    echo
    echo "Syntax: trl [-t|h|c]"
    echo "options:"
@@ -66,8 +73,7 @@ fi
 # Check dependency's availability, exit with notice if not #
 ############################################################
 
-if ! is_bin_in_path jq
-then
+if ! is_bin_in_path jq; then
    echo "This tool requires jq (https://stedolan.github.io/jq/)."
    echo "Install it please, and then run this tool again."
    echo "Use trl -h for further information."

@@ -8,6 +8,11 @@ If you use this for your day-to-day, human-not-machine translation desires, no m
 **Providing your own API key by signing up for free with [DeepL](https://www.deepl.com/en/pro-api?cta=header-pro-api/) is necessary for this to function.**
 
 
+Once you have your own API key, please enter it into the API_KEY.txt file in the following format:
+
+    deepl_auth_key your-api-key-here:fx
+
+
 ## Valid uses – examples
 
 Both the target language (`-t`) and the content of the string to be translated (`-c`) must be specified.
