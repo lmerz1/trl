@@ -1,8 +1,11 @@
 #!/bin/zsh
 
 ############################################################
+# Translate on the command line with DeepL                 #
 # Written starting from 2023-05                            #
 ############################################################
+
+path_to_api_key=./API_KEY.txt
 
 ############################################################
 # Helper functions                                         #
@@ -43,8 +46,8 @@ function is_bin_in_path {
 ############################################################
 
 if [[ $1 == "" ]]; then
-    help;
-    exit;
+   help;
+   exit;
 else
    while getopts "ht:c:" option; do
       case $option in
@@ -66,7 +69,7 @@ fi
 # Read API key from file and perform a (basic) check       #
 ############################################################
 
-auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' ./API_KEY.txt)
+auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' $path_to_api_key)
 if [[ ! -n $auth_key ]] then
    echo "Please set a valid DeepL authentication key in API_KEY.txt"
    echo "Use trl -h for further information."
