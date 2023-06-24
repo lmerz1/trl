@@ -69,8 +69,8 @@ fi
 # Read API key from file and perform a (basic) check       #
 ############################################################
 
-auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' $path_to_api_key)
-if [[ ! -n $auth_key ]] then
+auth_key=$(awk '$1 == "deepl_auth_key" { print $2 }' "$path_to_api_key")
+if [[ -z $auth_key ]]; then
    echo "Please set a valid DeepL authentication key in API_KEY.txt"
    echo "Use trl -h for further information."
    exit
@@ -99,8 +99,8 @@ echo
 
 response=$(curl -s -X POST 'https://api-free.deepl.com/v2/translate' \
          -H 'Authorization: DeepL-Auth-Key '"$auth_key" \
-         -d text=$content \
-         -d target_lang=$target)
+         -d text="$content" \
+         -d target_lang="$target")
 
 answer_text=$(jq -r  '.translations[0].text' <<< "${response}")
 source_lang=$(jq -r '.translations[0].detected_source_language' <<< "${response}")
