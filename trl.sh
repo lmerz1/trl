@@ -30,7 +30,7 @@ function help()
 # True if $1 is an executable in $PATH
 # Works in both {ba,z}sh
 function is_bin_in_path {
-  if [[ -n $ZSH_VERSION ]]; then
+  if [[ -n "$ZSH_VERSION" ]]; then
     builtin whence -p "$1" &> /dev/null
   else  # bash:
     builtin type -P "$1" &> /dev/null
@@ -45,7 +45,7 @@ function is_bin_in_path {
 # Process the input options.                               #
 ############################################################
 
-if [[ $1 == "" ]]; then
+if [[ "$1" == "" ]]; then
    help;
    exit;
 else
