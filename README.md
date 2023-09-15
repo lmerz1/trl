@@ -51,7 +51,7 @@ Currently using [jq](https://stedolan.github.io/jq/) for processing the response
 
 ## Further info
 
-For more detailed documentation, check out [DeepL's API](https://www.deepl.com/en/docs-api/introduction/) as well as the [list of ISO 639-1 country codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) which are used for abbreviating the target language.
+For more detailed documentation, check out [DeepL's API](https://www.deepl.com/en/docs-api/introduction/) as well as the [list of ISO 639-1 language codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) which are used for abbreviating the target language.
 
  Not affiliated in any way with DeepL SE, but appreciative of their free API.
 
