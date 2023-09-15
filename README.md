@@ -27,6 +27,7 @@ Example output:
 
     ~ % trl -c "Can my terminal display a Japanese script?" -t ja
     端末に日本語を表示できますか？ 
+    ~ % 
 
 and with -f:
 
