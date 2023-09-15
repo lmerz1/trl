@@ -18,14 +18,19 @@ Once you have your own API key, please enter it into the API_KEY.txt file in the
 Both the target language (`-t`) and the content of the string to be translated (`-c`) must be specified.
 
     trl -h
-    trl -t ES -c "Hallo Welt! Wie geht's?"
+    trl -t es -c "Hallo Welt! Wie geht's?"
     trl -c "How does Hungarian work again..." -t "HU"
     
     
 
 Example output:
 
-    ~ % trl -c "How does Hungarian work again? I forgot..." -t HU
+    ~ % trl -c "Can my terminal display a Japanese script?" -t ja
+    端末に日本語を表示できますか？ 
+
+and with -f:
+
+    ~ % trl -c "How does Hungarian work again? I forgot..." -t HU -f
 
         Request:
         Target language: HU
