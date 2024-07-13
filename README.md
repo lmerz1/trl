@@ -24,7 +24,7 @@ export DEEPL_API_KEY="your-api-key-here:fx"
 
 Alternatively, please enter it into a separate text file in the following format, on a new line, and use the `-f` flag to supply the path to this file:
 - In the file, put: `DEEPL_API_KEY your-api-key-here:fx`
-- Using it, add the option: `-f /path/to/API_KEYS.txt`
+- When using `trl`, add the option: `-f /path/to/API_KEYS.txt`
 
 
 ## Dependencies
