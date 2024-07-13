@@ -29,21 +29,19 @@ Alternatively, please enter it into a separate text file in the following format
 
 ## Dependencies
 
-`trl` is a basic Python script. It needs:
+`trl` is a simple Python script. It needs:
 - Any `python3` version (this is technically untested, but any _should_ work)
 - The `requests` module, i.e. `pip install requests`
 
 
 ## Options
 
-`-t`, `--target`: Two-letter ISO 639-1 language code – check with DeepL which languages are currently supported (links [below](#further-info))
-
-`-c`, `--content`: The content to be translated.
-
-`-s`, `--source`: (optional) Specfiy the source language, if necessary, for more accurate translations.
-
-`-m`, `--more_output`: (optional) Enable a fancier, longer output formatting including the input and language detection info.
+- `-t`, `--target`: Two-letter ISO 639-1 language code – check with DeepL which languages are currently supported (links [below](#further-info))
+- `-c`, `--content`: The content to be translated.
+- `-s`, `--source`: (optional) Specfiy the source language, if necessary, for more accurate translations.
+- `-m`, `--more_output`: (optional) Enable a fancier, longer output formatting including the input and language detection info.
                        Default output is the pure response text and nothing else.
+- `-f`, `--file`: (optional) Path to the "config" file containing the API key in the format described above.
 
 
 ## Valid uses – examples
