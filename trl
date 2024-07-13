@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+import sys
+import requests
+
+
+# Helper function
+def translate(auth_key, target_lang, text, source_lang="", more_output=False):
+    url = "https://api-free.deepl.com/v2/translate"
+    headers = {"Authorization": f"DeepL-Auth-Key {auth_key}"}
+    data = {"text": text, "target_lang": target_lang}
+    if source_lang:
+        data["source_lang"] = source_lang
+
+    response = requests.post(url, headers=headers, data=data)
+    if response.status_code != 200:
+        print(
+            "Error: failed to fetch translation from DeepL.\nAre your API key and language code set correctly?",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    response_json = response.json()
+    translated_text = response_json["translations"][0]["text"]
+    detected_language = response_json["translations"][0]["detected_source_language"]
+
+    if more_output:
+        print()
+        print("    Request:")
+        print(f"    Target language: {target_lang.upper()}")
+        print(f"    >>> '{text}'")
+        print()
+        print("    Answer:")
+        if source_lang:
+            print(f"    Supplied source language: {source_lang.upper()}")
+        else:
+            # DeepL's response for the detected language is always in upper case
+            print(f"    Detected source language: {detected_language}")
+        print(f"    >>> '{translated_text}'")
+        print()
+    else:
+        print(translated_text)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Translate phrases quickly using DeepL",
+        epilog="Registration for an API key is free, but required for this program. (https://deepl.com/api)",
+    )
+
+    parser.add_argument(
+        "-t",
+        "--target",
+        type=str,
+        help="Two-letter target language code, ex. FR, ES, DE, JA, ...",
+    )
+    parser.add_argument("-c", "--content", type=str, help="Content to be translated.")
+    parser.add_argument(
+        "-s", "--source", type=str, help="(optional) Specify the source language."
+    )
+    parser.add_argument(
+        "-f",
+        "--file",
+        help="Path to file containing the DeepL API key (instead of exporting an environment variable).",
+    )
+    parser.add_argument(
+        "-m",
+        "--more_output",
+        action="store_true",
+        help='Enable "more output" formatting including the input and language detection info. Default output is the response text only.',
+    )
+
+    args = parser.parse_args()
+
+    auth_key = os.getenv("DEEPL_API_KEY")
+
+    if args.file:
+        try:
+            with open(args.file, "r") as file:
+                for line in file:
+                    if "DEEPL_API_KEY" in line:
+                        auth_key = line.split()[1]
+                        break
+        except FileNotFoundError:
+            print("Error: specified API key file does not exist.", file=sys.stderr)
+            sys.exit(1)
+
+    if not auth_key:
+        print(
+            "Please set a valid DeepL authentication key in API_KEY.txt or export an environment variable named $DEEPL_API_KEY"
+        )
+        print("Use trl -h for further information.")
+        sys.exit(1)
+
+    if not args.content and not sys.stdin.isatty():
+        args.content = sys.stdin.read().strip()
+
+    if not args.content:
+        print(
+            "Content is required. Use the -c flag or provide content via stdin. Use -h for help.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    translate(auth_key, args.target, args.content, args.source, args.more_output)
+
+
+if __name__ == "__main__":
+    main()
