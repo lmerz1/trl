@@ -126,7 +126,7 @@ weeks
 ## Further info
 
 For more detailed documentation, see the list of [ISO 639-1 language codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) which are used for abbreviating the target language.
-Check with [DeepL](https://www.deepl.com/en/docs-api/introduction/) which languages are currently supported.
+Check the [DeepL documentation](https://www.deepl.com/en/docs-api/introduction/) to see which languages are currently supported.
 
 Not affiliated in any way with DeepL SE, but appreciative of their free API offering.
 
