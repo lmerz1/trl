@@ -56,14 +56,25 @@ def main():
         type=str,
         help="Two-letter target language code, ex. FR, ES, DE, JA, ...",
     )
-    parser.add_argument("-c", "--content", type=str, help="Content to be translated.")
+    parser.add_argument(
+        "-c",
+        "--content",
+        type=str,
+        help="Content to be translated. Don't specify when piping into the program, redirecting input via the shell, or using a here-doc.",
+    )
     parser.add_argument(
         "-s", "--source", type=str, help="(optional) Specify the source language."
     )
     parser.add_argument(
         "-f",
         "--file",
-        help="Path to file containing the DeepL API key (instead of exporting an environment variable).",
+        help="Path to file containing the DeepL API key (instead of exporting an environment variable). If passed, takes precedence over the environment variable.",
+    )
+    parser.add_argument(
+        "-k",
+        "--key",
+        type=str,
+        help="Pass your API key directly (as literal or a shell variable). Caution: This might cause the key to show up in your shell history! Takes precedence over path to file containing the key.",
     )
     parser.add_argument(
         "-m",
@@ -87,9 +98,12 @@ def main():
             print("Error: specified API key file does not exist.", file=sys.stderr)
             sys.exit(1)
 
+    if args.key:
+        auth_key = args.key
+
     if not auth_key:
         print(
-            "Please set a valid DeepL authentication key in API_KEY.txt or export an environment variable named $DEEPL_API_KEY"
+            "Please set a valid DeepL authentication key in a text file and pass it using --file, or export an environment variable named $DEEPL_API_KEY, or pass it into this program using --key."
         )
         print("Use trl -h for further information.")
         sys.exit(1)
