@@ -42,6 +42,11 @@ Alternatively, please enter it into a separate text file in the following format
 - `-m`, `--more_output`: (optional) Enable a fancier, longer output formatting including the input and language detection info.
                        Default output is the pure response text and nothing else.
 - `-f`, `--file`: (optional) Path to the "config" file containing the API key in the format described above.
+- `-k`, `--key`: (optional) Directly supply the API key to the program. Not particularly recommended. Remember to keep track of and/or clean your shell history if necessary!
+
+The different authentication options to pass an API key take precedence in
+the reverse order they are listed here, i.e. `--key` will be selected before
+`--file` will come before a `DEEPL_API_KEY` environment/shell variable.
 
 
 ## Valid uses – examples
@@ -88,7 +93,7 @@ This can especially occur if shorter phrases or single words are to be translate
 In such cases, a specific source language (`-s`) in the request **can** also be specified:
 
 ```
-$ trl -mt en -c uger     
+$ trl -mt en -c "uger"     
 
     Request:
     Target language: EN
@@ -98,7 +103,7 @@ $ trl -mt en -c uger
     Detected source language: EN
     >>> 'uger'
 
-$ trl -mt en -c uger -s da
+$ trl -mt en -c "uger" -s da
 
     Request:
     Target language: EN
@@ -119,6 +124,13 @@ uger
 $ trl -ten -c uger -sda
 weeks
 ```
+
+
+## Roadmap
+
+`trl` is very robust and works flawlessly for me on a near-daily basis.  
+That said, I do plan on abstracting the API provider out of the core logic at
+some point, such that different translation engines may be selected by the user.
 
 
 ## Further info
