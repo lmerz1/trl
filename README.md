@@ -34,7 +34,7 @@ Or, for more convenient swapping between multiple keys/providers:
 export DEEPL_API_KEY_1="your-api-key-here:fx"
 export TRL_API_KEY="$DEEPL_API_KEY_1"
 ```
-Or, if you have the key defined somewhere else, only choose which one you want
+Or, if you have the key(s) defined somewhere else, only choose which one you want
 to use right before the actual request:
 ```sh
 TRL_API_KEY="$DEEPL_API_KEY_1" trl --target EN --content "test"
