@@ -93,7 +93,7 @@ class DeepLProvider(BaseTranslationProvider):
 
 
 class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
-    name = "local_libretranslate"  # TODO: better name for this (and the class)…?
+    name = "local_libretranslate"
 
     def __init__(self, api_key=""):
         self.api_key = api_key
@@ -107,7 +107,6 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         port: Optional[int] = None,
     ):
         if port is None:
-            # raise ValueError("A valid port number must be provided, got None.")
             port = 5000  # Self-hosted LibreTranslate's standard port
 
         # TODO: add support for non-localhost URLs…?
