@@ -34,11 +34,22 @@ Or, for more convenient swapping between multiple keys/providers:
 export DEEPL_API_KEY_1="your-api-key-here:fx"
 export TRL_API_KEY="$DEEPL_API_KEY_1"
 ```
+Or, if you have the key(s) defined somewhere else, only choose which one you want
+to use right before the actual request:
+```sh
+TRL_API_KEY="$DEEPL_API_KEY_1" trl --target EN --content "test"
+```
 
 Alternatively, please enter it into a separate text file in the following
 format, on a new line, and use the `-f` flag to supply the path to this file:
 - In the file, put: `TRL_API_KEY your-api-key-here`
 - When using `trl`, add the option: `-f /path/to/API_KEYS.txt`
+
+Speaking of shell and environment variables, if you find yourself often translating
+into the same target language, you may set a default in your shell config:
+```sh
+export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available language's code
+```
 
 
 ## Dependencies

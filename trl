@@ -178,6 +178,7 @@ def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
 
 
 def main():
+    target_default = os.getenv("TRL_DEFAULT_TARGET_LANG")
     parser = argparse.ArgumentParser(
         prog="trl",
         description="Translate phrases quickly using various translation providers",
@@ -195,7 +196,8 @@ def main():
         "-t",
         "--target",
         type=str,
-        required=True,
+        default=target_default,
+        required=(target_default is None),
         help="Two-letter target language code, ex. FR, ES, DE, JA, ...",
     )
     parser.add_argument(
