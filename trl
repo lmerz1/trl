@@ -4,63 +4,206 @@ import argparse
 import os
 import sys
 import requests
+import warnings
+from typing import Optional
 
 
-# Helper function
-def translate(auth_key, target_lang, text, source_lang="", more_output=False):
-    url = "https://api-free.deepl.com/v2/translate"
-    headers = {"Authorization": f"DeepL-Auth-Key {auth_key}"}
-    data = {"text": text, "target_lang": target_lang}
-    if source_lang:
-        data["source_lang"] = source_lang
+class BaseTranslationProvider:
+    name = ""
 
-    response = requests.post(url, headers=headers, data=data)
-    if response.status_code != 200:
-        print(
-            "Error: failed to fetch translation from DeepL.\nAre your API key and language code set correctly?",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
-    response_json = response.json()
-    translated_text = response_json["translations"][0]["text"]
-    detected_language = response_json["translations"][0]["detected_source_language"]
+    def translate(
+        self,
+        target_lang: str,
+        source_text: str,
+        source_lang: str = "",
+        more_output: bool = False,
+        port: Optional[int] = None,
+    ):
+        raise NotImplementedError("This method should be overridden by subclasses.")
 
-    if more_output:
-        print()
-        print("    Request:")
-        print(f"    Target language: {target_lang.upper()}")
-        print(f"    >>> '{text}'")
-        print()
-        print("    Answer:")
+    @staticmethod
+    def pretty_format_more_output(
+        target_lang: str,
+        text: str,
+        translated_text: str,
+        source_lang: str = "",
+        detected_lang: str = "",
+    ):
+        out = "\n    Request:\n"
+        out += f"    Target language: {target_lang.upper()}\n"
+        out += f"    >>> '{text}'\n\n"
+        out += "    Answer:\n"
         if source_lang:
-            print(f"    Supplied source language: {source_lang.upper()}")
+            out += f"    Supplied source language: {source_lang.upper()}\n"
         else:
-            # DeepL's response for the detected language is always in upper case
-            print(f"    Detected source language: {detected_language}")
-        print(f"    >>> '{translated_text}'")
-        print()
-    else:
-        print(translated_text)
+            out += f"    Detected source language: {detected_lang.upper()}\n"
+        out += f"    >>> '{translated_text}'\n"
+        return out
+
+    @staticmethod
+    def print_translation_result(result: str, longer_result: str = ""):
+        print(longer_result) if longer_result else print(result)
+
+
+class DeepLProvider(BaseTranslationProvider):
+    name = "deepl"
+
+    def translate(
+        self,
+        target_lang: str,
+        source_text: str,
+        source_lang: str = "",
+        more_output: bool = False,
+        port: Optional[int] = None,
+    ):
+        if port is not None:
+            warnings.warn(
+                f"Port argument is ignored with this translation provider! (Provided port: '{port}')"
+            )
+
+        url = "https://api-free.deepl.com/v2/translate"
+        headers = {"Authorization": f"DeepL-Auth-Key {self.api_key}"}
+        data = {"text": source_text, "target_lang": target_lang}
+        if source_lang:
+            data["source_lang"] = source_lang
+
+        response = requests.post(url, headers=headers, data=data)
+        if response.status_code != 200:
+            raise RuntimeError(
+                "Error: failed to fetch translation from DeepL.\nAre your API key and language code set correctly?",
+            )
+        response_json = response.json()
+        translated_text: str = response_json["translations"][0]["text"]
+        detected_lang: str = response_json["translations"][0][
+            "detected_source_language"
+        ]
+
+        if more_output:
+            additional = BaseTranslationProvider.pretty_format_more_output(
+                target_lang, source_text, translated_text, source_lang, detected_lang
+            )
+        else:
+            additional = ""
+        return BaseTranslationProvider.print_translation_result(
+            translated_text, additional
+        )
+
+
+class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
+    name = "local_libretranslate"  # TODO: better name for this (and the class)…?
+
+    def __init__(self, api_key=""):
+        self.api_key = api_key
+
+    def translate(
+        self,
+        target_lang: str,
+        source_text: str,
+        source_lang: str = "",
+        more_output: bool = False,
+        port: Optional[int] = None,
+    ):
+        if port is None:
+            # raise ValueError("A valid port number must be provided, got None.")
+            port = 5000  # Self-hosted LibreTranslate's standard port
+
+        # TODO: add support for non-localhost URLs…?
+        url = f"http://localhost:{port}/translate"
+        payload = {
+            "q": source_text,
+            "source": source_lang if source_lang else "auto",
+            "target": target_lang,
+            "format": "text",
+            # "alternatives": 3,
+        }
+
+        if self.api_key:
+            payload["api_key"] = self.api_key
+
+        response = requests.post(
+            url, json=payload, headers={"Content-Type": "application/json"}
+        )
+        if response.status_code != 200:
+            # (potential) TODO: can detection of available languages be
+            # automated/queried somehow with self-hosted LibreTranslate?
+            raise RuntimeError(
+                "Error: failed to fetch translation from LibreTranslate.\nAre your API key, port, and language code set correctly?\nWhich languages are available/downloaded on your instance?",
+            )
+        response_json = response.json()
+        translated_text: str = response_json["translatedText"]
+        detected_lang: str = response_json["detectedLanguage"]["language"]
+
+        if more_output:
+            additional = BaseTranslationProvider.pretty_format_more_output(
+                target_lang,
+                source_text,
+                translated_text,
+                source_lang if source_lang else "",
+                detected_lang,
+            )
+        else:
+            additional = ""
+        return BaseTranslationProvider.print_translation_result(
+            translated_text, additional
+        )
+
+
+# TODO: additional providers can be added here in the future, as well as in the
+# providers dictionary below with one or multiple shorthand forms of the class
+# name for quick switching in the CLI
+
+
+def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
+    """
+    Returns the provider instance corresponding to the given provider name.
+
+    :param provider_name: The name of the translation provider.
+    :param api_key: API key to authenticate with the provider.
+    :raises ValueError: If the provider name is not recognized.
+    :return: An instance of BaseProvider.
+    """
+    providers = {
+        "deepl": DeepLProvider,
+        "local_libretranslate": LibreTranslateSelfhostedProvider,
+        "libretranslate_local": LibreTranslateSelfhostedProvider,
+        "local": LibreTranslateSelfhostedProvider,
+        # TODO: … new provider classes abbreviations can be added here…
+    }
+    provider_class = providers.get(provider_name.lower())
+    if not provider_class:
+        raise ValueError(f"Error: Unknown provider '{provider_name}'")
+    return provider_class(api_key)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Translate phrases quickly using DeepL",
-        epilog="Registration for an API key is free, but required for this program. (https://deepl.com/api)",
+        prog="trl",
+        description="Translate phrases quickly using various translation providers",
+        epilog="Registration for an API key is free with DeepL (https://deepl.com/api) and thus recommended for getting started.",
     )
 
+    parser.add_argument(
+        "-p",
+        "--provider",
+        type=str,
+        default="deepl",
+        help="Translation API provider to use. Default is 'DeepL'.",
+    )
     parser.add_argument(
         "-t",
         "--target",
         type=str,
+        required=True,
         help="Two-letter target language code, ex. FR, ES, DE, JA, ...",
     )
     parser.add_argument(
         "-c",
         "--content",
         type=str,
-        help="Content to be translated. Don't specify when piping into the program, redirecting input via the shell, or using a here-doc.",
+        help="Content to be translated. Don't specify when piping input into the program.",
     )
     parser.add_argument(
         "-s", "--source", type=str, help="(optional) Specify the source language."
@@ -68,49 +211,49 @@ def main():
     parser.add_argument(
         "-f",
         "--file",
-        help="Path to file containing the DeepL API key (instead of exporting an environment variable). If passed, takes precedence over the environment variable.",
+        help="Path to file containing the API key. Takes precedence over TRL_API_KEY environment variable.",
     )
     parser.add_argument(
         "-k",
         "--key",
         type=str,
-        help="Pass your API key directly (as literal or a shell variable). Caution: This might cause the key to show up in your shell history! Takes precedence over path to file containing the key.",
+        help="Pass your API key directly. Takes precedence over file and environment variable.",
     )
     parser.add_argument(
         "-m",
         "--more_output",
         action="store_true",
-        help='Enable "more output" formatting including the input and language detection info. Default output is the response text only.',
+        help='Enable "more output" formatting with input and language detection info.',
     )
-
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="Port when your translation service, e.g. self-hosted LibreTranslate, is running on a local machine. Defaults to 5000.",
+    )
     args = parser.parse_args()
 
-    auth_key = os.getenv("DEEPL_API_KEY")
-
+    api_key = os.getenv("TRL_API_KEY")
     if args.file:
         try:
             with open(args.file, "r") as file:
                 for line in file:
-                    if "DEEPL_API_KEY" in line:
-                        auth_key = line.split()[1]
+                    if "TRL_API_KEY" in line:
+                        api_key = line.split()[1]
                         break
         except FileNotFoundError:
             print("Error: specified API key file does not exist.", file=sys.stderr)
             sys.exit(1)
-
     if args.key:
-        auth_key = args.key
-
-    if not auth_key:
+        api_key = args.key
+    if not api_key:
         print(
-            "Please set a valid DeepL authentication key in a text file and pass it using --file, or export an environment variable named $DEEPL_API_KEY, or pass it into this program using --key."
+            'Please provide a valid API key via file, environment variable ($TRL_API_KEY), or the --key option.\nIf your provider does not require an API key, you can pass --key " " (or set the environment variable) to circumvent this message.',
+            file=sys.stderr,
         )
-        print("Use trl -h for further information.")
         sys.exit(1)
 
     if not args.content and not sys.stdin.isatty():
         args.content = sys.stdin.read().strip()
-
     if not args.content:
         print(
             "Content is required. Use the -c flag or provide content via stdin. Use -h for help.",
@@ -118,7 +261,10 @@ def main():
         )
         sys.exit(1)
 
-    translate(auth_key, args.target, args.content, args.source, args.more_output)
+    provider = get_provider(args.provider, api_key)
+    provider.translate(
+        args.target, args.content, args.source, args.more_output, args.port
+    )
 
 
 if __name__ == "__main__":
