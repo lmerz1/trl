@@ -2,7 +2,11 @@
 
 import argparse
 import os
+import shlex
+import shutil
+import subprocess
 import sys
+import tempfile
 import requests
 import warnings
 from typing import Optional
@@ -177,6 +181,73 @@ def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
     return provider_class(api_key)
 
 
+def read_content_source(
+    direct_content: Optional[str], input_file: Optional[str], use_editor: bool
+) -> Optional[str]:
+    if direct_content is not None:
+        return direct_content
+
+    if input_file:
+        if input_file == "-":
+            return sys.stdin.read()
+
+        try:
+            with open(input_file, "r", encoding="utf-8") as file:
+                return file.read()
+        except OSError as error:
+            print(
+                f"Error: failed to read the specified input file: {error}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if use_editor:
+        return edit_content()
+
+    if not sys.stdin.isatty():
+        return sys.stdin.read()
+
+    return None
+
+
+def get_editor_command() -> list[str]:
+    for env_var in ("VISUAL", "EDITOR"):
+        value = os.getenv(env_var)
+        if value:
+            return shlex.split(value)
+
+    for editor in ("nano", "vim", "vi", "hx"):
+        editor_path = shutil.which(editor)
+        if editor_path:
+            return [editor_path]
+
+    raise RuntimeError("Error: no editor found. Set $VISUAL or $EDITOR to use --edit.")
+
+
+def edit_content() -> str:
+    fd, temp_path = tempfile.mkstemp(prefix="trl-", suffix=".txt")
+    os.close(fd)
+
+    try:
+        editor_command = get_editor_command()
+        try:
+            result = subprocess.run(editor_command + [temp_path])
+        except OSError as error:
+            raise RuntimeError(
+                f"Error: failed to launch the editor: {error}"
+            ) from error
+        if result.returncode != 0:
+            raise RuntimeError("Error: editor exited unsuccessfully.")
+
+        with open(temp_path, "r", encoding="utf-8") as file:
+            return file.read()
+    finally:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+
+
 def main():
     target_default = os.getenv("TRL_DEFAULT_TARGET_LANG")
     parser = argparse.ArgumentParser(
@@ -200,11 +271,23 @@ def main():
         required=(target_default is None),
         help="Two-letter target language code, ex. FR, ES, DE, JA, ...",
     )
-    parser.add_argument(
+    content_group = parser.add_mutually_exclusive_group()
+    content_group.add_argument(
         "-c",
         "--content",
         type=str,
-        help="Content to be translated. Don't specify when piping input into the program.",
+        help="Content to be translated. Omit this when using --input-file, --edit, or stdin.",
+    )
+    content_group.add_argument(
+        "-i",
+        "--input-file",
+        help="Path to a file containing the content to be translated. Use '-' to read stdin explicitly.",
+    )
+    content_group.add_argument(
+        "-e",
+        "--edit",
+        action="store_true",
+        help="Open your editor to compose the content to be translated.",
     )
     parser.add_argument(
         "-s", "--source", type=str, help="(optional) Specify the source language."
@@ -253,18 +336,21 @@ def main():
         )
         sys.exit(1)
 
-    if not args.content and not sys.stdin.isatty():
-        args.content = sys.stdin.read().strip()
-    if not args.content:
+    try:
+        content = read_content_source(args.content, args.input_file, args.edit)
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)
+    if content is None or content == "":
         print(
-            "Content is required. Use the -c flag or provide content via stdin. Use -h for help.",
+            "Content is required. Use -c/--content, --input-file, --edit, or provide content via stdin. Use -h for help.",
             file=sys.stderr,
         )
         sys.exit(1)
 
     provider = get_provider(args.provider, api_key)
     provider.translate(
-        args.target, args.content, args.source, args.more_output, args.port
+        args.target, content, args.source, args.more_output, args.port
     )
 
 
