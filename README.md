@@ -77,7 +77,11 @@ export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available langua
 
 - `-t`, `--target`: Two-letter ISO 639-1 language code – check with DeepL which
   languages are currently supported (links [below](#further-info))
-- `-c`, `--content`: The content to be translated.
+- `-c`, `--content`: The content to be translated directly on the command line.
+- `-i`, `--input-file`: Read the content to be translated from a file.
+  Use `-` to read from standard input explicitly.
+- `--edit`: Open your `$VISUAL` or `$EDITOR` to compose the content to be
+  translated without fighting shell quoting.
 - `-s`, `--source`: (optional) Specify the source language, if necessary, for
   more accurate translations.
 - `-m`, `--more_output`: (optional) Enable a fancier, longer output formatting
@@ -103,8 +107,9 @@ export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available langua
 
 ## Valid uses – examples
 
-Both the target language (`-t`) and the content of the string to be translated
-(`-c`) **must** be specified.
+The target language (`-t`) must be specified unless you set
+`TRL_DEFAULT_TARGET_LANG`.
+The content can be supplied via `-c`, `--input-file`, `--edit`, or stdin.
 
 ```sh
 trl -h
@@ -112,6 +117,12 @@ trl -t ES -c "Hallo Welt! Wie geht's?"
 trl -c "What does Hungarian look like again..." -t "hu"
 echo "hello world"|trl -tfr
 trl -t en < query.txt > output.txt
+trl -t en --input-file query.txt > output.txt
+trl -t en --input-file -
+trl -t en --edit
+trl -t JA <<'EOF'
+Can my terminal display "special" shell characters like `'"!? safely?
+EOF
 ```
 
 Example output:
@@ -218,4 +229,3 @@ the exposed functionality is also kept way simpler here. :-)
 
 The author is not affiliated in any way with DeepL SE, but highly appreciative
 of their free API offering.
-
