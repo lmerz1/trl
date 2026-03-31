@@ -84,7 +84,7 @@ export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available langua
   translated without fighting shell quoting.
 - `-s`, `--source`: (optional) Specify the source language, if necessary, for
   more accurate translations.
-- `-m`, `--more_output`: (optional) Enable a fancier, longer output formatting
+- `-m`, `--more-output`: (optional) Enable a fancier, longer output formatting
   including the input and language detection info. Default output is the pure
   response text and nothing else.
 - `-f`, `--file`: (optional) Path to the "config" file containing the API key in

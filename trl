@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
+from abc import ABC, abstractmethod
 import argparse
 import os
+from pathlib import Path
 import shlex
 import shutil
 import subprocess
@@ -9,15 +11,57 @@ import sys
 import tempfile
 import requests
 import warnings
-from typing import Optional
+from typing import TYPE_CHECKING, Callable, Optional, Protocol, TypeVar, TypedDict, cast
+
+if TYPE_CHECKING:
+    from typing_extensions import override
+
+    class CliArgs(Protocol):
+        provider: str
+        target: str
+        content: Optional[str]
+        input_file: Optional[str]
+        edit: bool
+        source: Optional[str]
+        file: Optional[Path]
+        key: Optional[str]
+        more_output: bool
+        port: Optional[int]
+else:
+    _F = TypeVar("_F", bound=Callable[..., object])
+
+    def override(method: _F, /) -> _F:
+        return method
+
+    CliArgs = argparse.Namespace
 
 
-class BaseTranslationProvider:
-    name = ""
+class DeepLTranslationResult(TypedDict):
+    text: str
+    detected_source_language: str
+
+
+class DeepLTranslationResponse(TypedDict):
+    translations: list[DeepLTranslationResult]
+
+
+class LibreTranslateDetectedLanguage(TypedDict):
+    language: str
+
+
+class LibreTranslateResponse(TypedDict):
+    translatedText: str
+    detectedLanguage: LibreTranslateDetectedLanguage
+
+
+class BaseTranslationProvider(ABC):
+    name: str = ""
+    api_key: str
 
     def __init__(self, api_key: str):
         self.api_key = api_key
 
+    @abstractmethod
     def translate(
         self,
         target_lang: str,
@@ -25,8 +69,18 @@ class BaseTranslationProvider:
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
-    ):
-        raise NotImplementedError("This method should be overridden by subclasses.")
+    ) -> str:
+        ...
+
+    def translate_and_print(
+        self,
+        target_lang: str,
+        source_text: str,
+        source_lang: str = "",
+        more_output: bool = False,
+        port: Optional[int] = None,
+    ) -> None:
+        print(self.translate(target_lang, source_text, source_lang, more_output, port))
 
     @staticmethod
     def pretty_format_more_output(
@@ -35,7 +89,7 @@ class BaseTranslationProvider:
         translated_text: str,
         source_lang: str = "",
         detected_lang: str = "",
-    ):
+    ) -> str:
         out = "\n    Request:\n"
         out += f"    Target language: {target_lang.upper()}\n"
         out += f"    >>> '{text}'\n\n"
@@ -47,14 +101,11 @@ class BaseTranslationProvider:
         out += f"    >>> '{translated_text}'\n"
         return out
 
-    @staticmethod
-    def print_translation_result(result: str, longer_result: str = ""):
-        print(longer_result) if longer_result else print(result)
-
 
 class DeepLProvider(BaseTranslationProvider):
-    name = "deepl"
+    name: str = "deepl"
 
+    @override
     def translate(
         self,
         target_lang: str,
@@ -62,7 +113,7 @@ class DeepLProvider(BaseTranslationProvider):
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
-    ):
+    ) -> str:
         if port is not None:
             warnings.warn(
                 f"Port argument is ignored with this translation provider! (Provided port: '{port}')"
@@ -79,29 +130,23 @@ class DeepLProvider(BaseTranslationProvider):
             raise RuntimeError(
                 "Error: failed to fetch translation from DeepL.\nAre your API key and language code set correctly?",
             )
-        response_json = response.json()
+        response_json = cast(DeepLTranslationResponse, response.json())
         translated_text: str = response_json["translations"][0]["text"]
         detected_lang: str = response_json["translations"][0][
             "detected_source_language"
         ]
 
         if more_output:
-            additional = BaseTranslationProvider.pretty_format_more_output(
+            return BaseTranslationProvider.pretty_format_more_output(
                 target_lang, source_text, translated_text, source_lang, detected_lang
             )
-        else:
-            additional = ""
-        return BaseTranslationProvider.print_translation_result(
-            translated_text, additional
-        )
+        return translated_text
 
 
 class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
-    name = "local_libretranslate"
+    name: str = "local_libretranslate"
 
-    def __init__(self, api_key=""):
-        self.api_key = api_key
-
+    @override
     def translate(
         self,
         target_lang: str,
@@ -109,7 +154,7 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
-    ):
+    ) -> str:
         if port is None:
             port = 5000  # Self-hosted LibreTranslate's standard port
 
@@ -135,23 +180,19 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
             raise RuntimeError(
                 "Error: failed to fetch translation from LibreTranslate.\nAre your API key, port, and language code set correctly?\nWhich languages are available/downloaded on your instance?",
             )
-        response_json = response.json()
+        response_json = cast(LibreTranslateResponse, response.json())
         translated_text: str = response_json["translatedText"]
         detected_lang: str = response_json["detectedLanguage"]["language"]
 
         if more_output:
-            additional = BaseTranslationProvider.pretty_format_more_output(
+            return BaseTranslationProvider.pretty_format_more_output(
                 target_lang,
                 source_text,
                 translated_text,
                 source_lang if source_lang else "",
                 detected_lang,
             )
-        else:
-            additional = ""
-        return BaseTranslationProvider.print_translation_result(
-            translated_text, additional
-        )
+        return translated_text
 
 
 # TODO: additional providers can be added here in the future, as well as in the
@@ -161,14 +202,14 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
 
 def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
     """
-    Returns the provider instance corresponding to the given provider name.
+    Return the provider instance corresponding to the given provider name.
 
     :param provider_name: The name of the translation provider.
     :param api_key: API key to authenticate with the provider.
     :raises ValueError: If the provider name is not recognized.
     :return: An instance of BaseProvider.
     """
-    providers = {
+    providers: dict[str, type[BaseTranslationProvider]] = {
         "deepl": DeepLProvider,
         "local_libretranslate": LibreTranslateSelfhostedProvider,
         "libretranslate_local": LibreTranslateSelfhostedProvider,
@@ -256,14 +297,14 @@ def main():
         epilog="Registration for an API key is free with DeepL (https://deepl.com/api) and thus recommended for getting started.",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "-p",
         "--provider",
         type=str,
         default="deepl",
         help="Translation API provider to use. Default is 'DeepL'.",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-t",
         "--target",
         type=str,
@@ -272,54 +313,56 @@ def main():
         help="Two-letter target language code, ex. FR, ES, DE, JA, ...",
     )
     content_group = parser.add_mutually_exclusive_group()
-    content_group.add_argument(
+    _ = content_group.add_argument(
         "-c",
         "--content",
         type=str,
         help="Content to be translated. Omit this when using --input-file, --edit, or stdin.",
     )
-    content_group.add_argument(
+    _ = content_group.add_argument(
         "-i",
         "--input-file",
         help="Path to a file containing the content to be translated. Use '-' to read stdin explicitly.",
     )
-    content_group.add_argument(
+    _ = content_group.add_argument(
         "-e",
         "--edit",
         action="store_true",
         help="Open your editor to compose the content to be translated.",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-s", "--source", type=str, help="(optional) Specify the source language."
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-f",
         "--file",
+        type=Path,
         help="Path to file containing the API key. Takes precedence over TRL_API_KEY environment variable.",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-k",
         "--key",
         type=str,
         help="Pass your API key directly. Takes precedence over file and environment variable.",
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "-m",
         "--more_output",
+        "--more-output",
         action="store_true",
         help='Enable "more output" formatting with input and language detection info.',
     )
-    parser.add_argument(
+    _ = parser.add_argument(
         "--port",
         type=int,
         help="Port when your translation service, e.g. self-hosted LibreTranslate, is running on a local machine. Defaults to 5000.",
     )
-    args = parser.parse_args()
+    args = cast(CliArgs, cast(object, parser.parse_args()))
 
     api_key = os.getenv("TRL_API_KEY")
     if args.file:
         try:
-            with open(args.file, "r") as file:
+            with open(args.file, "r", encoding="utf-8") as file:
                 for line in file:
                     if "TRL_API_KEY" in line:
                         api_key = line.split()[1]
@@ -349,8 +392,8 @@ def main():
         sys.exit(1)
 
     provider = get_provider(args.provider, api_key)
-    provider.translate(
-        args.target, content, args.source, args.more_output, args.port
+    provider.translate_and_print(
+        args.target, content, args.source or "", args.more_output, args.port
     )
 
 
