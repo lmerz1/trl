@@ -54,6 +54,31 @@ class LibreTranslateResponse(TypedDict):
     detectedLanguage: LibreTranslateDetectedLanguage
 
 
+UNIX_EDITOR_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("sensible-editor", ()),
+    ("editor", ()),
+    ("nano", ()),
+    ("nvim", ()),
+    ("vim", ()),
+    ("vi", ()),
+    ("hx", ()),
+    ("kak", ()),
+    ("micro", ()),
+    ("code", ("--wait",)),
+    ("code-insiders", ("--wait",)),
+    ("codium", ("--wait",)),
+    ("codium-insiders", ("--wait",)),
+    ("cursor", ("--wait",)),
+    ("zed", ("--wait",)),
+)
+
+GUI_EDITOR_WAIT_FLAGS: dict[str, tuple[str, ...]] = {
+    editor: wait_args
+    for editor, wait_args in UNIX_EDITOR_CANDIDATES
+    if wait_args
+}
+
+
 class BaseTranslationProvider(ABC):
     name: str = ""
     api_key: str
@@ -252,17 +277,34 @@ def read_content_source(
 
 
 def get_editor_command() -> list[str]:
+    if os.name == "nt":
+        raise RuntimeError("Error: --edit is not supported on Windows.")
+
     for env_var in ("VISUAL", "EDITOR"):
         value = os.getenv(env_var)
         if value:
-            return shlex.split(value)
+            return add_editor_wait_args(shlex.split(value))
 
-    for editor in ("nano", "vim", "vi", "hx"):
+    for editor, wait_args in UNIX_EDITOR_CANDIDATES:
         editor_path = shutil.which(editor)
         if editor_path:
-            return [editor_path]
+            return [editor_path, *wait_args]
 
-    raise RuntimeError("Error: no editor found. Set $VISUAL or $EDITOR to use --edit.")
+    raise RuntimeError(
+        "Error: no suitable Unix editor found. Set VISUAL or EDITOR to use --edit."
+    )
+
+
+def add_editor_wait_args(command: list[str]) -> list[str]:
+    if not command:
+        raise RuntimeError("Error: VISUAL or EDITOR is set, but empty after parsing.")
+
+    editor_name = os.path.basename(command[0])
+    wait_args = GUI_EDITOR_WAIT_FLAGS.get(editor_name)
+    if not wait_args or "--wait" in command:
+        return command
+
+    return [*command, *wait_args]
 
 
 def edit_content() -> str:
@@ -328,7 +370,7 @@ def main():
         "-e",
         "--edit",
         action="store_true",
-        help="Open your editor to compose the content to be translated.",
+        help="Open a Unix editor to compose the content to be translated (not supported on Windows).",
     )
     _ = parser.add_argument(
         "-s", "--source", type=str, help="(optional) Specify the source language."
