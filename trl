@@ -27,6 +27,8 @@ if TYPE_CHECKING:
         key: Optional[str]
         more_output: bool
         port: Optional[int]
+        base_url: Optional[str]
+        model: Optional[str]
 else:
     _F = TypeVar("_F", bound=Callable[..., object])
 
@@ -52,6 +54,10 @@ class LibreTranslateDetectedLanguage(TypedDict):
 class LibreTranslateResponse(TypedDict):
     translatedText: str
     detectedLanguage: LibreTranslateDetectedLanguage
+
+
+class OllamaGenerateResponse(TypedDict):
+    response: str
 
 
 UNIX_EDITOR_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -82,6 +88,7 @@ GUI_EDITOR_WAIT_FLAGS: dict[str, tuple[str, ...]] = {
 class BaseTranslationProvider(ABC):
     name: str = ""
     api_key: str
+    requires_api_key: bool = True
 
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -94,6 +101,8 @@ class BaseTranslationProvider(ABC):
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
+        base_url: Optional[str] = None,
+        model: str = "",
     ) -> str:
         ...
 
@@ -104,8 +113,20 @@ class BaseTranslationProvider(ABC):
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
+        base_url: Optional[str] = None,
+        model: str = "",
     ) -> None:
-        print(self.translate(target_lang, source_text, source_lang, more_output, port))
+        print(
+            self.translate(
+                target_lang,
+                source_text,
+                source_lang,
+                more_output,
+                port,
+                base_url,
+                model,
+            )
+        )
 
     @staticmethod
     def pretty_format_more_output(
@@ -121,10 +142,34 @@ class BaseTranslationProvider(ABC):
         out += "    Answer:\n"
         if source_lang:
             out += f"    Supplied source language: {source_lang.upper()}\n"
-        else:
+        elif detected_lang:
             out += f"    Detected source language: {detected_lang.upper()}\n"
+        else:
+            out += "    Detected source language: unavailable\n"
         out += f"    >>> '{translated_text}'\n"
         return out
+
+    @staticmethod
+    def resolve_base_url(
+        provider_name: str,
+        default_port: int,
+        port: Optional[int] = None,
+        base_url: Optional[str] = None,
+    ) -> str:
+        if base_url:
+            if port is not None:
+                warnings.warn(
+                    f"Port argument is ignored when base URL is set for provider '{provider_name}'."
+                )
+            return base_url.rstrip("/")
+
+        return f"http://localhost:{port or default_port}"
+
+    @staticmethod
+    def build_url(base_url: str, path: str) -> str:
+        normalized_base_url = base_url.rstrip("/")
+        normalized_path = path if path.startswith("/") else f"/{path}"
+        return f"{normalized_base_url}{normalized_path}"
 
 
 class DeepLProvider(BaseTranslationProvider):
@@ -138,11 +183,15 @@ class DeepLProvider(BaseTranslationProvider):
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
+        base_url: Optional[str] = None,
+        model: str = "",
     ) -> str:
-        if port is not None:
+        if port is not None or base_url is not None:
             warnings.warn(
-                f"Port argument is ignored with this translation provider! (Provided port: '{port}')"
+                "Connection options are ignored with this translation provider."
             )
+        if model:
+            warnings.warn("Model argument is ignored with this translation provider.")
 
         url = "https://api-free.deepl.com/v2/translate"
         headers = {"Authorization": f"DeepL-Auth-Key {self.api_key}"}
@@ -150,7 +199,12 @@ class DeepLProvider(BaseTranslationProvider):
         if source_lang:
             data["source_lang"] = source_lang
 
-        response = requests.post(url, headers=headers, data=data)
+        try:
+            response = requests.post(url, headers=headers, data=data)
+        except requests.RequestException as error:
+            raise RuntimeError(
+                "Error: failed to reach DeepL.\nAre your network connection and API settings correct?"
+            ) from error
         if response.status_code != 200:
             raise RuntimeError(
                 "Error: failed to fetch translation from DeepL.\nAre your API key and language code set correctly?",
@@ -170,6 +224,7 @@ class DeepLProvider(BaseTranslationProvider):
 
 class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
     name: str = "local_libretranslate"
+    requires_api_key: bool = False
 
     @override
     def translate(
@@ -179,12 +234,19 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         source_lang: str = "",
         more_output: bool = False,
         port: Optional[int] = None,
+        base_url: Optional[str] = None,
+        model: str = "",
     ) -> str:
-        if port is None:
-            port = 5000  # Self-hosted LibreTranslate's standard port
+        if model:
+            warnings.warn("Model argument is ignored with this translation provider.")
 
-        # TODO: add support for non-localhost URLs…?
-        url = f"http://localhost:{port}/translate"
+        service_base_url = BaseTranslationProvider.resolve_base_url(
+            self.name,
+            default_port=5000,
+            port=port,
+            base_url=base_url,
+        )
+        url = BaseTranslationProvider.build_url(service_base_url, "/translate")
         payload = {
             "q": source_text,
             "source": source_lang if source_lang else "auto",
@@ -196,9 +258,15 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         if self.api_key:
             payload["api_key"] = self.api_key
 
-        response = requests.post(
-            url, json=payload, headers={"Content-Type": "application/json"}
-        )
+        try:
+            response = requests.post(
+                url, json=payload, headers={"Content-Type": "application/json"}
+            )
+        except requests.RequestException as error:
+            raise RuntimeError(
+                "Error: failed to reach LibreTranslate.\n"
+                "Is the server reachable at the selected base URL or port?"
+            ) from error
         if response.status_code != 200:
             # (potential) TODO: can detection of available languages be
             # automated/queried somehow with self-hosted LibreTranslate?
@@ -216,6 +284,87 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
                 translated_text,
                 source_lang if source_lang else "",
                 detected_lang,
+            )
+        return translated_text
+
+
+class OllamaProvider(BaseTranslationProvider):
+    name: str = "ollama"
+    requires_api_key: bool = False
+
+    @staticmethod
+    def build_system_prompt(target_lang: str, source_lang: str = "") -> str:
+        if source_lang:
+            source_instruction = (
+                f"The source language is {source_lang.upper()}; treat that as authoritative."
+            )
+        else:
+            source_instruction = "Infer the source language from the user's text."
+
+        return (
+            "You are a translation engine.\n"
+            f"Translate the user's text into {target_lang.upper()}.\n"
+            f"{source_instruction}\n"
+            "Return only the final translation.\n"
+            "Do not add explanations, notes, alternatives, transliterations, "
+            "romanizations, quotes, or markdown fences.\n"
+            "Preserve the original meaning, tone, formatting, line breaks, code, "
+            "placeholders, and markup whenever possible.\n"
+            "If a term should remain unchanged, keep it unchanged."
+        )
+
+    @override
+    def translate(
+        self,
+        target_lang: str,
+        source_text: str,
+        source_lang: str = "",
+        more_output: bool = False,
+        port: Optional[int] = None,
+        base_url: Optional[str] = None,
+        model: str = "",
+    ) -> str:
+        if not model:
+            raise RuntimeError(
+                "Error: no model specified for Ollama.\nUse --model or set TRL_OLLAMA_MODEL."
+            )
+
+        service_base_url = BaseTranslationProvider.resolve_base_url(
+            self.name,
+            default_port=11434,
+            port=port,
+            base_url=base_url,
+        )
+        url = BaseTranslationProvider.build_url(service_base_url, "/api/generate")
+        payload = {
+            "model": model,
+            "prompt": source_text,
+            "system": self.build_system_prompt(target_lang, source_lang),
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+
+        try:
+            response = requests.post(url, json=payload)
+        except requests.RequestException as error:
+            raise RuntimeError(
+                "Error: failed to reach Ollama.\n"
+                "Is the server reachable at the selected base URL or port?"
+            ) from error
+        if response.status_code != 200:
+            raise RuntimeError(
+                "Error: failed to fetch translation from Ollama.\n"
+                "Are the model name and base URL correct, and is the Ollama server running?",
+            )
+        response_json = cast(OllamaGenerateResponse, response.json())
+        translated_text = response_json["response"].strip()
+
+        if more_output:
+            return BaseTranslationProvider.pretty_format_more_output(
+                target_lang,
+                source_text,
+                translated_text,
+                source_lang,
             )
         return translated_text
 
@@ -239,6 +388,9 @@ def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
         "local_libretranslate": LibreTranslateSelfhostedProvider,
         "libretranslate_local": LibreTranslateSelfhostedProvider,
         "local": LibreTranslateSelfhostedProvider,
+        "ollama": OllamaProvider,
+        "local_ollama": OllamaProvider,
+        "ollama_local": OllamaProvider,
         # TODO: … new provider classes abbreviations can be added here…
     }
     provider_class = providers.get(provider_name.lower())
@@ -333,10 +485,11 @@ def edit_content() -> str:
 
 def main():
     target_default = os.getenv("TRL_DEFAULT_TARGET_LANG")
+    ollama_model_default = os.getenv("TRL_OLLAMA_MODEL")
     parser = argparse.ArgumentParser(
         prog="trl",
         description="Translate phrases quickly using various translation providers",
-        epilog="Registration for an API key is free with DeepL (https://deepl.com/api) and thus recommended for getting started.",
+        epilog="Registration for an API key is free with DeepL (https://deepl.com/api) and thus recommended for getting started. Self-hosted providers such as LibreTranslate or Ollama may not require one.",
     )
 
     _ = parser.add_argument(
@@ -397,11 +550,22 @@ def main():
     _ = parser.add_argument(
         "--port",
         type=int,
-        help="Port when your translation service, e.g. self-hosted LibreTranslate, is running on a local machine. Defaults to 5000.",
+        help="Port when your translation service is running on localhost. Defaults depend on the provider, e.g. 5000 for LibreTranslate and 11434 for Ollama.",
+    )
+    _ = parser.add_argument(
+        "--base-url",
+        type=str,
+        help="Base URL for self-hosted or remote providers, e.g. http://localhost:11434 or https://example.com:11434. Ollama defaults to http://localhost:11434 when this is omitted.",
+    )
+    _ = parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Model name for providers that require one, e.g. an Ollama model. Can also be set via TRL_OLLAMA_MODEL.",
     )
     args = cast(CliArgs, cast(object, parser.parse_args()))
 
-    api_key = os.getenv("TRL_API_KEY")
+    api_key = os.getenv("TRL_API_KEY", "")
     if args.file:
         try:
             with open(args.file, "r", encoding="utf-8") as file:
@@ -412,14 +576,23 @@ def main():
         except FileNotFoundError:
             print("Error: specified API key file does not exist.", file=sys.stderr)
             sys.exit(1)
-    if args.key:
+    if args.key is not None:
         api_key = args.key
-    if not api_key:
+    try:
+        provider = get_provider(args.provider, api_key)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)
+    if provider.requires_api_key and not api_key:
         print(
             'Please provide a valid API key via file, environment variable ($TRL_API_KEY), or the --key option.\nIf your provider does not require an API key, you can pass --key " " (or set the environment variable) to circumvent this message.',
             file=sys.stderr,
         )
         sys.exit(1)
+
+    model = args.model
+    if isinstance(provider, OllamaProvider) and model is None:
+        model = ollama_model_default
 
     try:
         content = read_content_source(args.content, args.input_file, args.edit)
@@ -433,10 +606,19 @@ def main():
         )
         sys.exit(1)
 
-    provider = get_provider(args.provider, api_key)
-    provider.translate_and_print(
-        args.target, content, args.source or "", args.more_output, args.port
-    )
+    try:
+        provider.translate_and_print(
+            args.target,
+            content,
+            args.source or "",
+            args.more_output,
+            args.port,
+            args.base_url,
+            model or "",
+        )
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
