@@ -80,8 +80,11 @@ export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available langua
 - `-c`, `--content`: The content to be translated directly on the command line.
 - `-i`, `--input-file`: Read the content to be translated from a file.
   Use `-` to read from standard input explicitly.
-- `--edit`: Open your `$VISUAL` or `$EDITOR` to compose the content to be
-  translated without fighting shell quoting.
+- `--edit`: Open a Unix editor to compose the content to be translated without
+  fighting shell quoting.
+  `trl` checks `VISUAL` and `EDITOR` first, then falls back to common Unix
+  editors such as `nano`, `vim`, `hx`, `code`, `codium`, `cursor`, and `zed`.
+  This input mode is not available on Windows.
 - `-s`, `--source`: (optional) Specify the source language, if necessary, for
   more accurate translations.
 - `-m`, `--more-output`: (optional) Enable a fancier, longer output formatting
@@ -110,6 +113,7 @@ export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available langua
 The target language (`-t`) must be specified unless you set
 `TRL_DEFAULT_TARGET_LANG`.
 The content can be supplied via `-c`, `--input-file`, `--edit`, or stdin.
+`--edit` is Unix-only.
 
 ```sh
 trl -h
