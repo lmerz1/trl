@@ -8,9 +8,10 @@ At the moment, the default API used is DeepL.
 If you want to use this tool for your day-to-day translation needs, no major
 issues should occur regarding API request limits with them.
 
-**Providing your own API key by signing up for free with
-[DeepL](https://www.deepl.com/en/pro-api?cta=header-pro-api/)
-is currently necessary for the script to work.**
+**If you use DeepL, providing your own API key by signing up for free with
+[DeepL](https://www.deepl.com/en/pro-api?cta=header-pro-api/) is necessary.**
+Self-hosted providers such as `LibreTranslate` or `Ollama` may not require an
+API key at all, depending on how you run them.
 
 
 ## How to get started
@@ -24,8 +25,8 @@ curl https://raw.githubusercontent.com/lmerz1/trl/main/trl > trl && chmod +x trl
 ```
 
 `trl` will use DeepL by default.
-Once you have your own API key (see above), export it as an environment
-variable, for example in your `.{ba,z,…}shrc` file:
+If you use DeepL, export your API key as an environment variable, for example
+in your `.{ba,z,…}shrc` file:
 
 ```sh
 export TRL_API_KEY="your-api-key-here"
@@ -56,6 +57,12 @@ into the same target language often, you may set a default in your shell config:
 
 ```sh
 export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available language's code
+```
+
+If you use the `ollama` provider often, you may also set a default model:
+
+```sh
+export TRL_OLLAMA_MODEL=qwen3.5:4b
 ```
 
 
@@ -104,8 +111,14 @@ export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available langua
 - `-p`, `--provider`: Set the translation service provider. Defaults to DeepL's
   API, which requires a working key.
 - `--port`: If the above provider service is accessible on some local or remote
-  machine's port, specify it here.
-  Defaults to 5000, which is `LibreTranslate`'s default port.
+  machine's localhost port, specify it here.
+  Defaults depend on the provider, e.g. `5000` for `LibreTranslate` and
+  `11434` for `Ollama`.
+- `--base-url`: Base URL for self-hosted or remote providers, e.g.
+  `http://localhost:11434` or `https://example.com:11434`.
+  If omitted, `ollama` uses `http://localhost:11434` by default.
+- `--model`: Model name for providers that require one, e.g. `ollama`.
+  Can also be set via `TRL_OLLAMA_MODEL`.
 
 
 ## Valid uses – examples
@@ -124,6 +137,8 @@ trl -t en < query.txt > output.txt
 trl -t en --input-file query.txt > output.txt
 trl -t en --input-file -
 trl -t en --edit
+trl -p ollama --model qwen3.5:4b -t de -c "Please translate this."
+trl -p ollama --base-url https://my-remote-host.example:11434 --model qwen3.5:4b -t fr -c "Remote inference works too."
 trl -t JA <<'EOF'
 Can my terminal display "special" shell characters like `'"!? safely?
 EOF
@@ -212,9 +227,9 @@ However, `trl` does not check whether the assigned API key is valid for the
 selected provider, so in case multiple providers are ever used, you will have to
 keep those separated and, for the active one, updated and current yourself.
 
-At this time, the only actually available translation providers are DeepL and,
-if you install and run it locally, a self-hosted version of
-[LibreTranslate](https://docs.libretranslate.com/).  
+At this time, the available translation providers are DeepL, a self-hosted
+version of [LibreTranslate](https://docs.libretranslate.com/), and an
+[Ollama](https://ollama.com/) server reachable via its HTTP API.  
 I've got a few more in mind already, but feel free to suggest suitable new
 providers or otherwise report any problems or bugs you may encounter!
 Simply open a new issue [here](https://github.com/lmerz1/trl/issues/new).
