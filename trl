@@ -481,6 +481,7 @@ def edit_content() -> str:
 
 
 def main():
+    provider_default = os.getenv("TRL_DEFAULT_PROVIDER", "deepl")
     target_default = os.getenv("TRL_DEFAULT_TARGET_LANG")
     ollama_model_default = os.getenv("TRL_OLLAMA_MODEL")
     parser = argparse.ArgumentParser(
@@ -493,8 +494,8 @@ def main():
         "-p",
         "--provider",
         type=str,
-        default="deepl",
-        help="Translation API provider to use. Default is 'DeepL'.",
+        default=provider_default,
+        help="Translation API provider to use. Defaults to TRL_DEFAULT_PROVIDER when set, otherwise 'DeepL'.",
     )
     _ = parser.add_argument(
         "-t",
