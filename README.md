@@ -45,6 +45,9 @@ If you want to invoke `trl` this way regularly, add a shell alias:
 alias trl='uv run --quiet --with requests ~/.local/bin/trl'
 ```
 
+This remains the easiest option for new macOS users even when `python3`
+already exists on the system, because it avoids modifying that interpreter.
+
 ### Alternative: install `requests` into your active Python
 
 If you prefer to run the script directly through its shebang, install
@@ -54,6 +57,11 @@ If you prefer to run the script directly through its shebang, install
 python3 -m pip install --user requests
 trl -h
 ```
+
+This works with any `python3` that is Python 3.9 or newer, including older
+macOS system installations that still resolve `python3` to Python 3.9.
+`uv run` is still the cleaner default if you do not want to manage packages in
+that interpreter.
 
 ### Alternative: use a dedicated virtual environment
 
@@ -65,6 +73,9 @@ uv venv ~/.local/share/trl-venv
 ~/.local/share/trl-venv/bin/python -m pip install requests
 ~/.local/share/trl-venv/bin/python ~/.local/bin/trl -h
 ```
+
+This is also a good fit on macOS when your shell's `python3` points to an
+older system interpreter, because `uv venv` can provision its own Python.
 
 
 ## Quick start
@@ -125,6 +136,7 @@ Notes:
 - `--port` and `--base-url` may matter for self-hosted providers.
   If both are set, `--base-url` wins.
 - When using DeepL, `--port`, `--base-url`, and `--model` are ignored.
+- When using LibreTranslate, `--model` is ignored.
 
 
 ## Configuration

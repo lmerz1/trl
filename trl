@@ -11,8 +11,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import requests
 import warnings
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Callable, Protocol, TypeVar, TypedDict, cast
 
 if TYPE_CHECKING:
@@ -62,6 +62,25 @@ class OllamaGenerateResponse(TypedDict):
     response: str
 
 
+class RequestsResponse(Protocol):
+    status_code: int
+
+    def json(self) -> object: ...
+
+
+class RequestsModule(Protocol):
+    RequestException: type[BaseException]
+
+    def post(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        data: Mapping[str, str] | None = None,
+        json: object | None = None,
+    ) -> RequestsResponse: ...
+
+
 UNIX_EDITOR_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("sensible-editor", ()),
     ("editor", ()),
@@ -83,6 +102,19 @@ UNIX_EDITOR_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
 GUI_EDITOR_WAIT_FLAGS: dict[str, tuple[str, ...]] = {
     editor: wait_args for editor, wait_args in UNIX_EDITOR_CANDIDATES if wait_args
 }
+
+
+def get_requests_module() -> RequestsModule:
+    try:
+        import requests
+    except ModuleNotFoundError as error:
+        raise RuntimeError(
+            "Error: the Python package 'requests' is not installed.\n"
+            + "Install it with `python3 -m pip install --user requests`, or run "
+            + "the script with `uv run --with requests ...`."
+        ) from error
+
+    return cast(RequestsModule, requests)  # pyright: ignore[reportInvalidCast]
 
 
 class BaseTranslationProvider(ABC):
@@ -185,6 +217,8 @@ class DeepLProvider(BaseTranslationProvider):
         base_url: str | None = None,
         model: str = "",
     ) -> str:
+        requests = get_requests_module()
+
         if port is not None or base_url is not None:
             warnings.warn(
                 "Connection options are ignored with this translation provider."
@@ -236,6 +270,8 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         base_url: str | None = None,
         model: str = "",
     ) -> str:
+        requests = get_requests_module()
+
         if model:
             warnings.warn("Model argument is ignored with this translation provider.")
 
@@ -321,6 +357,8 @@ class OllamaProvider(BaseTranslationProvider):
         base_url: str | None = None,
         model: str = "",
     ) -> str:
+        requests = get_requests_module()
+
         if not model:
             raise RuntimeError(
                 "Error: no model specified for Ollama.\nUse --model or set TRL_OLLAMA_MODEL."
