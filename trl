@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 import argparse
 import os
@@ -9,9 +11,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import requests
 import warnings
-from typing import TYPE_CHECKING, Callable, Optional, Protocol, TypeVar, TypedDict, cast
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Callable, Protocol, TypeVar, TypedDict, cast
 
 if TYPE_CHECKING:
     from typing_extensions import override
@@ -19,16 +21,16 @@ if TYPE_CHECKING:
     class CliArgs(Protocol):
         provider: str
         target: str
-        content: Optional[str]
-        input_file: Optional[str]
+        content: str | None
+        input_file: str | None
         edit: bool
-        source: Optional[str]
-        file: Optional[Path]
-        key: Optional[str]
+        source: str | None
+        file: Path | None
+        key: str | None
         more_output: bool
-        port: Optional[int]
-        base_url: Optional[str]
-        model: Optional[str]
+        port: int | None
+        base_url: str | None
+        model: str | None
 else:
     _F = TypeVar("_F", bound=Callable[..., object])
 
@@ -60,6 +62,25 @@ class OllamaGenerateResponse(TypedDict):
     response: str
 
 
+class RequestsResponse(Protocol):
+    status_code: int
+
+    def json(self) -> object: ...
+
+
+class RequestsModule(Protocol):
+    RequestException: type[BaseException]
+
+    def post(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        data: Mapping[str, str] | None = None,
+        json: object | None = None,
+    ) -> RequestsResponse: ...
+
+
 UNIX_EDITOR_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("sensible-editor", ()),
     ("editor", ()),
@@ -83,6 +104,19 @@ GUI_EDITOR_WAIT_FLAGS: dict[str, tuple[str, ...]] = {
 }
 
 
+def get_requests_module() -> RequestsModule:
+    try:
+        import requests
+    except ModuleNotFoundError as error:
+        raise RuntimeError(
+            "Error: the Python package 'requests' is not installed.\n"
+            + "Install it with `python3 -m pip install --user requests`, or run "
+            + "the script with `uv run --with requests ...`."
+        ) from error
+
+    return cast(RequestsModule, requests)  # pyright: ignore[reportInvalidCast]
+
+
 class BaseTranslationProvider(ABC):
     name: str = ""
     api_key: str
@@ -98,8 +132,8 @@ class BaseTranslationProvider(ABC):
         source_text: str,
         source_lang: str = "",
         more_output: bool = False,
-        port: Optional[int] = None,
-        base_url: Optional[str] = None,
+        port: int | None = None,
+        base_url: str | None = None,
         model: str = "",
     ) -> str: ...
 
@@ -109,8 +143,8 @@ class BaseTranslationProvider(ABC):
         source_text: str,
         source_lang: str = "",
         more_output: bool = False,
-        port: Optional[int] = None,
-        base_url: Optional[str] = None,
+        port: int | None = None,
+        base_url: str | None = None,
         model: str = "",
     ) -> None:
         print(
@@ -150,8 +184,8 @@ class BaseTranslationProvider(ABC):
     def resolve_base_url(
         provider_name: str,
         default_port: int,
-        port: Optional[int] = None,
-        base_url: Optional[str] = None,
+        port: int | None = None,
+        base_url: str | None = None,
     ) -> str:
         if base_url:
             if port is not None:
@@ -179,10 +213,12 @@ class DeepLProvider(BaseTranslationProvider):
         source_text: str,
         source_lang: str = "",
         more_output: bool = False,
-        port: Optional[int] = None,
-        base_url: Optional[str] = None,
+        port: int | None = None,
+        base_url: str | None = None,
         model: str = "",
     ) -> str:
+        requests = get_requests_module()
+
         if port is not None or base_url is not None:
             warnings.warn(
                 "Connection options are ignored with this translation provider."
@@ -230,10 +266,12 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         source_text: str,
         source_lang: str = "",
         more_output: bool = False,
-        port: Optional[int] = None,
-        base_url: Optional[str] = None,
+        port: int | None = None,
+        base_url: str | None = None,
         model: str = "",
     ) -> str:
+        requests = get_requests_module()
+
         if model:
             warnings.warn("Model argument is ignored with this translation provider.")
 
@@ -262,7 +300,7 @@ class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
         except requests.RequestException as error:
             raise RuntimeError(
                 "Error: failed to reach LibreTranslate.\n"
-                "Is the server reachable at the selected base URL or port?"
+                + "Is the server reachable at the selected base URL or port?"
             ) from error
         if response.status_code != 200:
             # (potential) TODO: can detection of available languages be
@@ -315,10 +353,12 @@ class OllamaProvider(BaseTranslationProvider):
         source_text: str,
         source_lang: str = "",
         more_output: bool = False,
-        port: Optional[int] = None,
-        base_url: Optional[str] = None,
+        port: int | None = None,
+        base_url: str | None = None,
         model: str = "",
     ) -> str:
+        requests = get_requests_module()
+
         if not model:
             raise RuntimeError(
                 "Error: no model specified for Ollama.\nUse --model or set TRL_OLLAMA_MODEL."
@@ -344,12 +384,12 @@ class OllamaProvider(BaseTranslationProvider):
         except requests.RequestException as error:
             raise RuntimeError(
                 "Error: failed to reach Ollama.\n"
-                "Is the server reachable at the selected base URL or port?"
+                + "Is the server reachable at the selected base URL or port?"
             ) from error
         if response.status_code != 200:
             raise RuntimeError(
                 "Error: failed to fetch translation from Ollama.\n"
-                "Are the model name and base URL correct, and is the Ollama server running?",
+                + "Are the model name and base URL correct, and is the Ollama server running?",
             )
         response_json = cast(OllamaGenerateResponse, response.json())
         translated_text = response_json["response"].strip()
@@ -397,8 +437,8 @@ def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
 
 
 def read_content_source(
-    direct_content: Optional[str], input_file: Optional[str], use_editor: bool
-) -> Optional[str]:
+    direct_content: str | None, input_file: str | None, use_editor: bool
+) -> str | None:
     if direct_content is not None:
         return direct_content
 
