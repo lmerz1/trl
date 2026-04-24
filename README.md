@@ -5,8 +5,10 @@
 translation providers behind one CLI and reads text from flags, files, stdin,
 or a local editor.
 
-The default provider is DeepL, which at the time of writing is free up to
-500,000 monthly characters translated.
+The built-in fallback/"default" provider is DeepL, which at the time of writing
+is free up to 500,000 monthly characters translated.
+You can override that default with `TRL_DEFAULT_PROVIDER` or a command-line
+option `--provider`/`-p` (see documentation below).  
 Self-hosted providers such as LibreTranslate and Ollama are also supported.
 
 
@@ -67,7 +69,7 @@ uv venv ~/.local/share/trl-venv
 
 ## Quick start
 
-### DeepL (default provider)
+### DeepL (built-in fallback default)
 
 DeepL is the default backend. It requires an API key.
 
@@ -105,7 +107,8 @@ trl -p libretranslate -t FR -c "Hello world"
 
 ## Providers
 
-These are the provider values currently accepted by `--provider`/`-p`:
+These are the provider values currently accepted by `--provider`/`-p` as well as
+the corresponding environment variable (`$TRL_DEFAULT_PROVIDER`):
 
 | Provider value   | Aliases for convenience      | Backend                    | API key      | Default connection       |
 | ---              | ---                          | ---                        | ---          | ---                      |
@@ -135,13 +138,19 @@ use the corresponding option if a required argument is missing.
 - `TRL_API_KEY`: API key for DeepL, or optionally for a LibreTranslate instance
   that requires one
 - `TRL_DEFAULT_TARGET_LANG`: default target language, so you can omit `-t`
+- `TRL_DEFAULT_PROVIDER`: default provider, so you can omit `-p` when using a
+  provider other than DeepL
 - `TRL_OLLAMA_MODEL`: default model for the `ollama` provider
+
+Option precedence is: command-line flag, then environment variable, then the
+built-in default.
 
 Examples:
 
 ```sh
 export TRL_API_KEY="your-api-key-here"
 export TRL_DEFAULT_TARGET_LANG="en"
+export TRL_DEFAULT_PROVIDER="ollama"
 export TRL_OLLAMA_MODEL="translategemma:4b"
 ```
 
