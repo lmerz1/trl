@@ -79,9 +79,7 @@ UNIX_EDITOR_CANDIDATES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 GUI_EDITOR_WAIT_FLAGS: dict[str, tuple[str, ...]] = {
-    editor: wait_args
-    for editor, wait_args in UNIX_EDITOR_CANDIDATES
-    if wait_args
+    editor: wait_args for editor, wait_args in UNIX_EDITOR_CANDIDATES if wait_args
 }
 
 
@@ -103,8 +101,7 @@ class BaseTranslationProvider(ABC):
         port: Optional[int] = None,
         base_url: Optional[str] = None,
         model: str = "",
-    ) -> str:
-        ...
+    ) -> str: ...
 
     def translate_and_print(
         self,
@@ -223,7 +220,7 @@ class DeepLProvider(BaseTranslationProvider):
 
 
 class LibreTranslateSelfhostedProvider(BaseTranslationProvider):
-    name: str = "local_libretranslate"
+    name: str = "libretranslate"
     requires_api_key: bool = False
 
     @override
@@ -295,9 +292,7 @@ class OllamaProvider(BaseTranslationProvider):
     @staticmethod
     def build_system_prompt(target_lang: str, source_lang: str = "") -> str:
         if source_lang:
-            source_instruction = (
-                f"The source language is {source_lang.upper()}; treat that as authoritative."
-            )
+            source_instruction = f"The source language is {source_lang.upper()}; treat that as authoritative."
         else:
             source_instruction = "Infer the source language from the user's text."
 
@@ -385,13 +380,15 @@ def get_provider(provider_name: str, api_key: str) -> BaseTranslationProvider:
     """
     providers: dict[str, type[BaseTranslationProvider]] = {
         "deepl": DeepLProvider,
-        "local_libretranslate": LibreTranslateSelfhostedProvider,
-        "libretranslate_local": LibreTranslateSelfhostedProvider,
-        "local": LibreTranslateSelfhostedProvider,
+        "d": DeepLProvider,
+        "libretranslate": LibreTranslateSelfhostedProvider,
+        "local_libre": LibreTranslateSelfhostedProvider,
+        "libre": LibreTranslateSelfhostedProvider,
+        "lt": LibreTranslateSelfhostedProvider,
         "ollama": OllamaProvider,
         "local_ollama": OllamaProvider,
-        "ollama_local": OllamaProvider,
-        # TODO: … new provider classes abbreviations can be added here…
+        "o": OllamaProvider,
+        # TODO: New provider classes abbreviations can be added here
     }
     provider_class = providers.get(provider_name.lower())
     if not provider_class:

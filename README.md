@@ -1,144 +1,209 @@
 
 # trl
 
-Translate phrases quickly and efficiently on the command line by wrapping around
-various translation providers' APIs.
+`trl` is a small Unix-friendly command-line translator. It wraps a few
+translation providers behind one CLI and reads text from flags, files, stdin,
+or a local editor.
 
-At the moment, the default API used is DeepL.  
-If you want to use this tool for your day-to-day translation needs, no major
-issues should occur regarding API request limits with them.
-
-**If you use DeepL, providing your own API key by signing up for free with
-[DeepL](https://www.deepl.com/en/pro-api?cta=header-pro-api/) is necessary.**
-Self-hosted providers such as `LibreTranslate` or `Ollama` may not require an
-API key at all, depending on how you run them.
+The default provider is DeepL, which at the time of writing is free up to
+500,000 monthly characters translated.
+Self-hosted providers such as LibreTranslate and Ollama are also supported.
 
 
-## How to get started
+## Requirements
 
-Download and add the script file to your `$PATH`. For UNIX users, it features a
-shebang, to avoid having to call it with `python3 trl.py` or similar.
+- A Unix-like shell environment
+- Python 3.9 or newer
+- The Python package `requests`
+
+
+## Getting started
+
+Download the standalone script somewhere on your `PATH`:
 
 ```sh
-# While in a directory that is part of your path
-curl https://raw.githubusercontent.com/lmerz1/trl/main/trl > trl && chmod +x trl
+mkdir -p ~/.local/bin  # and append the directory to your $PATH
+curl -fsSL https://raw.githubusercontent.com/lmerz1/trl/main/trl -o ~/.local/bin/trl
+chmod +x ~/.local/bin/trl
 ```
 
-`trl` will use DeepL by default.
-If you use DeepL, export your API key as an environment variable, for example
-in your `.{ba,z,…}shrc` file:
+### Recommended: run it with `uv`
+
+If you already use [`uv`](https://docs.astral.sh/uv/), this is the least
+surprising way to satisfy the `requests` dependency for a single-file script
+without touching your system Python:
+
+```sh
+uv run --with requests ~/.local/bin/trl -h
+```
+
+If you want to invoke `trl` this way regularly, add a shell alias:
+
+```sh
+alias trl='uv run --quiet --with requests ~/.local/bin/trl'
+```
+
+### Alternative: install `requests` into your active Python
+
+If you prefer to run the script directly through its shebang, install
+`requests` for the same `python3` that `/usr/bin/env python3` will resolve to:
+
+```sh
+python3 -m pip install --user requests
+trl -h
+```
+
+### Alternative: use a dedicated virtual environment
+
+If you want a persistent isolated environment without using `uv run` on every
+invocation:
+
+```sh
+uv venv ~/.local/share/trl-venv
+~/.local/share/trl-venv/bin/python -m pip install requests
+~/.local/share/trl-venv/bin/python ~/.local/bin/trl -h
+```
+
+
+## Quick start
+
+### DeepL (default provider)
+
+DeepL is the default backend. It requires an API key.
+
+Create a free API key with [DeepL](https://www.deepl.com/en/pro-api?cta=header-pro-api/)
+and export it:
+
+```sh
+export TRL_API_KEY='your-api-key-here'
+```
+
+Then run:
+
+```sh
+trl -t ES -c "Hallo Welt! Wie geht's?"
+```
+
+### Ollama
+
+Ollama does not require an API key, but it does require a model name and a
+reachable Ollama server:
+
+```sh
+trl --provider ollama --model qwen3.5:4b -t DE -c "Please translate this."
+```
+
+### LibreTranslate
+
+A self-hosted LibreTranslate instance usually does not require an API key. By
+default `trl` expects it on `http://localhost:5000`:
+
+```sh
+trl -p libretranslate -t FR -c "Hello world"
+```
+
+
+## Providers
+
+These are the provider values currently accepted by `--provider`/`-p`:
+
+| Provider value   | Aliases for convenience      | Backend                    | API key      | Default connection       |
+| ---              | ---                          | ---                        | ---          | ---                      |
+| `deepl`          | `d`                          | DeepL Free API             | Required     | DeepL-hosted API         |
+| `libretranslate` | `local_libre`, `libre`, `lt` | Self-hosted LibreTranslate | Optional*    | `http://localhost:5000`  |
+| `ollama`         | `local_ollama`, `o`          | Ollama HTTP API            | Not required | `http://localhost:11434` |
+
+*Depending on how your instance is set up
+
+
+Notes:
+
+- `--model` is required for `ollama` unless `TRL_OLLAMA_MODEL` is set.
+- `--port` and `--base-url` may matter for self-hosted providers.
+  If both are set, `--base-url` wins.
+- When using DeepL, `--port`, `--base-url`, and `--model` are ignored.
+
+
+## Configuration
+
+### Environment variables
+
+All environment variables are **optional**:
+`trl` will work even when none are set, however in this case, you may have to
+use the corresponding option if a required argument is missing.
+
+- `TRL_API_KEY`: API key for DeepL, or optionally for a LibreTranslate instance
+  that requires one
+- `TRL_DEFAULT_TARGET_LANG`: default target language, so you can omit `-t`
+- `TRL_OLLAMA_MODEL`: default model for the `ollama` provider
+
+Examples:
 
 ```sh
 export TRL_API_KEY="your-api-key-here"
+export TRL_DEFAULT_TARGET_LANG="en"
+export TRL_OLLAMA_MODEL="translategemma:4b"
 ```
 
-Or, for more convenient swapping between multiple keys/providers:
+If you rotate between multiple keys, keep them in separate shell variables and
+assign the active one only when needed:
 
 ```sh
 export DEEPL_API_KEY_1="your-api-key-here:fx"
-export TRL_API_KEY="$DEEPL_API_KEY_1"
+TRL_API_KEY="$DEEPL_API_KEY_1" trl -t EN -c "test"
 ```
 
-Or, if you have the key(s) defined somewhere else, only choose which one you want
-to use right before the actual request:
+### API key file
+
+You may also store a key in a text file and pass it via `-f` / `--file`.
+
+The file should contain a line like:
+
+```text
+TRL_API_KEY your-api-key-here
+```
+
+Then invoke:
 
 ```sh
-TRL_API_KEY="$DEEPL_API_KEY_1" trl --target EN --content "test"
+trl -f /path/to/API_KEYS.txt -t EN -c "test"
 ```
 
-Alternatively, please enter it into a separate text file in the following
-format, on a new line, and use the `-f` flag to supply the path to this file:
+Authentication precedence is:
 
-- In the file, put: `TRL_API_KEY your-api-key-here`
-- When using `trl`, add the option: `-f /path/to/API_KEYS.txt`
-
-Speaking of shell and environment variables, if you find yourself translating
-into the same target language often, you may set a default in your shell config:
-
-```sh
-export TRL_DEFAULT_TARGET_LANG=en  # or EN, or de, or any other available language's code
-```
-
-If you use the `ollama` provider often, you may also set a default model:
-
-```sh
-export TRL_OLLAMA_MODEL=qwen3.5:4b
-```
+1. `--key`
+2. `--file`
+3. `TRL_API_KEY`
 
 
-## Dependencies
+## Input modes
 
-`trl` is a simple Python script. It needs:
+You can provide content in any one of these ways:
 
-- Any `python3` version (this is technically untested, but any _should_ work)
-- The `requests` module, i.e. `pip install requests`
+- `-c`, `--content`: text directly on the command line
+- `-i`, `--input-file`: read from a file
+- `-i -`: read from stdin explicitly
+- `--edit`: compose text in a local editor
+- stdin without `-i -`: `trl` will also read piped input automatically
 
-> [!TIP]  
-> Should there occur any issues with your Python environment,
-> you may also run the script using [uv](https://docs.astral.sh/uv/):
-> After downloading, simply define a shell alias of your choice for
-> `uv run /path/to/trl`
-
-
-## Available options/flags
-
-- `-t`, `--target`: Two-letter ISO 639-1 language code – check with DeepL which
-  languages are currently supported (links [below](#further-info))
-- `-c`, `--content`: The content to be translated directly on the command line.
-- `-i`, `--input-file`: Read the content to be translated from a file.
-  Use `-` to read from standard input explicitly.
-- `--edit`: Open a Unix editor to compose the content to be translated without
-  fighting shell quoting.
-  `trl` checks `VISUAL` and `EDITOR` first, then falls back to common Unix
-  editors such as `nano`, `vim`, `hx`, `code`, `codium`, `cursor`, and `zed`.
-  This input mode is not available on Windows.
-- `-s`, `--source`: (optional) Specify the source language, if necessary, for
-  more accurate translations.
-- `-m`, `--more-output`: (optional) Enable a fancier, longer output formatting
-  including the input and language detection info. Default output is the pure
-  response text and nothing else.
-- `-f`, `--file`: (optional) Path to the "config" file containing the API key in
-  the format described above.
-- `-k`, `--key`: (optional) Directly supply the API key to the program. Not
-  particularly recommended except for e.g. quick testing.
-  Remember to keep track of and/or clean your shell history if necessary!
-
-> [!TIP]  
-> The different authentication options to pass an API key take precedence in
-> the reverse order they are listed here, i.e. `--key` will be selected before
-> `--file` which will come before a `TRL_API_KEY` environment/shell variable.
-
-- `-p`, `--provider`: Set the translation service provider. Defaults to DeepL's
-  API, which requires a working key.
-- `--port`: If the above provider service is accessible on some local or remote
-  machine's localhost port, specify it here.
-  Defaults depend on the provider, e.g. `5000` for `LibreTranslate` and
-  `11434` for `Ollama`.
-- `--base-url`: Base URL for self-hosted or remote providers, e.g.
-  `http://localhost:11434` or `https://example.com:11434`.
-  If omitted, `ollama` uses `http://localhost:11434` by default.
-- `--model`: Model name for providers that require one, e.g. `ollama`.
-  Can also be set via `TRL_OLLAMA_MODEL`.
+`--edit` is Unix-only. `trl` checks `VISUAL` and `EDITOR` first, then falls
+back to common editors such as `nano`, `vim`, `hx`, `code`, `codium`,
+`cursor`, and `zed`.
 
 
-## Valid uses – examples
-
-The target language (`-t`) must be specified unless you set
-`TRL_DEFAULT_TARGET_LANG`.
-The content can be supplied via `-c`, `--input-file`, `--edit`, or stdin.
-`--edit` is Unix-only.
+## Common usage
 
 ```sh
 trl -h
 trl -t ES -c "Hallo Welt! Wie geht's?"
-trl -c "What does Hungarian look like again..." -t "hu"
-echo "hello world"|trl -tfr
-trl -t en < query.txt > output.txt
-trl -t en --input-file query.txt > output.txt
-trl -t en --input-file -
-trl -t en --edit
-trl -p ollama --model qwen3.5:4b -t de -c "Please translate this."
-trl -p ollama --base-url https://my-remote-host.example:11434 --model qwen3.5:4b -t fr -c "Remote inference works too."
+trl -c "What does Hungarian look like again..." -t HU
+echo "hello world" | trl -t FR
+trl -t EN < query.txt > output.txt
+trl -t EN --input-file query.txt > output.txt
+trl -t EN --input-file -
+trl -t EN --edit
+trl -p ollama --model qwen3.5:4b -t DE -c "Please translate this."
+trl -p ollama --base-url https://remote-host.example:11434 --model translategemma:4b -t FR -c "Remote inference works too."
 trl -t JA <<'EOF'
 Can my terminal display "special" shell characters like `'"!? safely?
 EOF
@@ -146,16 +211,15 @@ EOF
 
 Example output:
 
-```sh
-~ % trl -c "Can my terminal display a Japanese script?" -t JA
-端末に日本語を表示できますか？ 
-~ % 
+```text
+$ trl -c "Can my terminal display a Japanese script?" -t JA
+端末に日本語を表示できますか？
 ```
 
-and with `-m`:
+With `-m` / `--more-output`:
 
 ```text
-~ % trl -c "What does Hungarian look like again? I forgot..." -t hu -m
+$ trl -c "What does Hungarian look like again? I forgot..." -t HU -m
 
     Request:
     Target language: HU
@@ -164,87 +228,55 @@ and with `-m`:
     Answer:
     Detected source language: EN
     >>> 'Hogy is néz ki a magyar? Elfelejtettem...'
-
-~ % 
 ```
 
-Typically, source language detection works flawlessly.
-However, there are cases where the translated result differs depending on the
-source language, which a provider might not be able to unambiguously
-recognize.
-This can especially occur if shorter phrases or single words are to be
-translated, as in the following example cases where DeepL trips.
 
-In such cases, a specific source language (`-s`) in the request **can** also
-be specified:
+## Options
+
+- `-t`, `--target`: target language code
+- `-c`, `--content`: content to translate
+- `-i`, `--input-file`: read content from a file; use `-` for stdin
+- `-e`, `--edit`: compose content in a local editor
+- `-s`, `--source`: source language, if you want to override auto-detection
+- `-m`, `--more-output`, `--more_output`: include request and language info in
+  the output
+- `-f`, `--file`: path to a file containing `TRL_API_KEY ...`
+- `-k`, `--key`: pass an API key directly on the command line
+- `-p`, `--provider`: choose the backend provider
+- `--port`: override the default port for a self-hosted provider
+- `--base-url`: full base URL for a self-hosted or remote provider
+- `--model`: model name for providers that require one, such as `ollama`
+
+
+## Caveats
+
+- `trl` does not validate that the selected API key matches the selected
+  provider.
+- Supported languages depend on the provider you use.
+- Short or ambiguous input may translate differently depending on whether you
+  specify `--source`.
+
+Example:
 
 ```text
-$ trl -mt en -c "uger"     
-
-    Request:
-    Target language: EN
-    >>> 'uger'
-
-    Answer:
-    Detected source language: EN
-    >>> 'uger'
-
-$ trl -mt en -c "uger" -s da
-
-    Request:
-    Target language: EN
-    >>> 'uger'
-
-    Answer:
-    Supplied source language: DA
-    >>> 'weeks'
-
-$
-```
-
-This would of course also work without the `-m` flag's increased output/"fancy"
-formatting, but it has been included above as to demonstrate the difference in
-processing and output:
-
-```sh
-$ trl -ten -c uger  
-uger
-$ trl -ten -c uger -sda
-weeks
-# another example where DeepL doesn't give the expected answer:
-$ trl -t EN -c "haine"                          
+$ trl -t EN -c "haine"
 haine
 $ trl -t EN -c "haine" -s FR
 hate
 ```
 
 
-## Other caveats
-
-`trl` is very robust and works flawlessly for me on a near-daily basis.  
-
-However, `trl` does not check whether the assigned API key is valid for the
-selected provider, so in case multiple providers are ever used, you will have to
-keep those separated and, for the active one, updated and current yourself.
-
-At this time, the available translation providers are DeepL, a self-hosted
-version of [LibreTranslate](https://docs.libretranslate.com/), and an
-[Ollama](https://ollama.com/) server reachable via its HTTP API.  
-I've got a few more in mind already, but feel free to suggest suitable new
-providers or otherwise report any problems or bugs you may encounter!
-Simply open a new issue [here](https://github.com/lmerz1/trl/issues/new).
-
-
 ## Further info
 
-For more detailed documentation, see the list of
-[ISO 639-1 language codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)
-which are typically used for abbreviating the target language.
-Check the [DeepL documentation](https://www.deepl.com/en/docs-api/introduction/)
-to see which languages they currently support.
-They also have their own [API clients](https://www.github.com/deeplcom/)
-available for various languages, which this project does not make use of, since
-the exposed functionality is also kept way simpler here. :-)
+- [ISO 639-1 language codes](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes)
+  in use by DeepL's API. You may also be able to use full written-out language
+  names with language models in the Ollama provider.
+- [DeepL API documentation](https://developers.deepl.com/docs/getting-started/about).
+  They also offer a [CLI API client](https://github.com/DeepLcom/deepl-cli) with
+  more features than this project has, however `trl` has existed for longer. 🙂
+- [LibreTranslate documentation](https://docs.libretranslate.com/)
+- [Ollama](https://ollama.com/)
+- [Open a new issue](https://github.com/lmerz1/trl/issues/new)
 
-The author is not affiliated in any way with DeepL SE, but highly appreciative
-of their free API offering.
+The author is not affiliated with DeepL SE or any of the other translation
+providers.
